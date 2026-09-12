@@ -1,144 +1,324 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Othello (VS CPU) - GitHub Version</title>
-    <link rel="stylesheet" href="style.css">
+    <title>オセロゲーム & ランキング</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .setup-container, .game-container, .ranking-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        input[type="text"] {
+            width: 80%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #0056b3; }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background-color: #333;
+            padding: 2px;
+            width: 320px;
+            height: 320px;
+            margin: 0 auto 15px;
+        }
+        .cell {
+            background-color: #006633;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+        .disc {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            display: none;
+        }
+        .black { background-color: black; display: block; }
+        .white { background-color: white; display: block; }
+        #status { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #555; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #f8f9fa; color: #555; }
+    </style>
 </head>
 <body>
-    <h1>Othello VS CPU</h1>
-    <div id="status">Your Turn (Black)</div>
-    <div id="board"></div>
+
+    <h1>オセロゲーム</h1>
+
+    <!-- 1. ユーザー名入力エリア -->
+    <div id="setup-area" class="setup-container">
+        <h3>ユーザー名を入力してください</h3>
+        <input type="text" id="username-input" placeholder="例: プレイヤー1" maxlength="15">
+        <br>
+        <button onclick="startGame()">ゲーム開始</button>
+    </div>
+
+    <!-- 2. オセロゲーム本体エリア（最初は非表示） -->
+    <div id="game-area" class="game-container" style="display: none;">
+        <div id="status">黒の番です</div>
+        <div id="board"></div>
+        <button onclick="resetGame()">最初からやり直す</button>
+    </div>
+
+    <!-- 3. ランキング表示エリア -->
+    <div class="ranking-container">
+        <h3>🔥 世界対戦回数ランキング (Top 10)</h3>
+        <table id="leaderboard-table">
+            <thead>
+                <tr>
+                    <th>順位</th>
+                    <th>ユーザー名</th>
+                    <th>対戦回数</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboard-body">
+                <tr><td colspan="3" style="text-align:center;">読み込み中...</td></tr>
+            </tbody>
+        </table>
+    </div>
 
     <script>
-        // 0: Empty, 1: Black (Player), 2: White (CPU)
-        let board = Array(8).fill(null).map(() => Array(8).fill(0));
-        
-        // Initial setup
-        board[3][3] = 2; board[3][4] = 1;
-        board[4][3] = 1; board[4][4] = 2;
+        // あなたのRenderサーバーのURL（最後にスラッシュは不要）
+        const RENDER_API_URL = "https://onrender.com";
 
-        const boardEl = document.getElementById('board');
-        const statusEl = document.getElementById('status');
-        let isPlayerTurn = true;
+        let currentUsername = "";
+        const boardElement = document.getElementById('board');
+        const statusElement = document.getElementById('status');
+        let board = [];
+        let turn = 1; // 1: 黒, -1: 白
 
-        function drawBoard() {
-            boardEl.innerHTML = '';
+        // ページ読み込み時にランキングを取得
+        window.onload = function() {
+            fetchLeaderboard();
+        };
+
+        // ユーザー名を入力してゲームを開始する
+        function startGame() {
+            const input = document.getElementById('username-input').value.trim();
+            if (!input) {
+                alert("名前を入力してください！");
+                return;
+            }
+            currentUsername = input;
+            document.getElementById('setup-area').style.display = 'none';
+            document.getElementById('game-area').style.display = 'block';
+            initGame();
+        }
+        // ランキングをRender経由でSupabaseから取得して表示
+        async function fetchLeaderboard() {
+            try {
+                const response = await fetch(`${RENDER_API_URL}/api/leaderboard`);
+                const data = await response.json();
+                const tbody = document.getElementById('leaderboard-body');
+                tbody.innerHTML = "";
+
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;">データがありません</td></tr>`;
+                    return;
+                }
+
+                data.forEach((row, index) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${index + 1}位</td>
+                        <td>${escapeHtml(row.username)}</td>
+                        <td>${row.match_count}回</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error("ランキングの取得失敗:", error);
+                document.getElementById('leaderboard-body').innerHTML = `<tr><td colspan="3" style="text-align:center; color:red;">取得に失敗しました</td></tr>`;
+            }
+        }
+
+        // ゲーム終了時にRenderへカウントを送信する関数
+        async function sendMatchComplete() {
+            if (!currentUsername) return;
+            try {
+                statusElement.textContent = "対戦結果を保存中...";
+                const response = await fetch(`${RENDER_API_URL}/api/match-complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: currentUsername })
+                });
+                const result = await response.json();
+                console.log("保存結果:", result);
+                // 保存が終わったらランキングを最新に更新
+                fetchLeaderboard();
+            } catch (error) {
+                console.error("結果の送信失敗:", error);
+            }
+        }
+        // オセロの初期化（元のCPU対戦ロジックをシンプルに移植）
+        function initGame() {
+            boardElement.innerHTML = "";
+            board = Array(8).fill(null).map(() => Array(8).fill(0));
+            turn = 1;
+            statusElement.textContent = "あなたの番です（黒）";
+
+            // 初期配置
+            board[3][3] = -1; board[3][4] = 1;
+            board[4][3] = 1;  board[4][4] = -1;
+
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     const cell = document.createElement('div');
                     cell.className = 'cell';
-                    cell.onclick = () => handleCellClick(r, c);
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    
+                    const disc = document.createElement('div');
+                    disc.className = 'disc';
+                    cell.appendChild(disc);
+                    
+                    cell.addEventListener('click', () => handleCellClick(r, c));
+                    boardElement.appendChild(cell);
+                }
+            }
+            updateBoardDOM();
+        }
 
-                    if (board[r][c] === 1) {
-                        const piece = document.createElement('div');
-                        piece.className = 'piece black';
-                        cell.appendChild(piece);
-                    } else if (board[r][c] === 2) {
-                        const piece = document.createElement('div');
-                        piece.className = 'piece white';
-                        cell.appendChild(piece);
-                    }
-                    boardEl.appendChild(cell);
+        function updateBoardDOM() {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const cell = boardElement.children[r * 8 + c];
+                    const disc = cell.firstChild;
+                    disc.className = 'disc';
+                    if (board[r][c] === 1) disc.classList.add('black');
+                    if (board[r][c] === -1) disc.classList.add('white');
                 }
             }
         }
 
         function handleCellClick(r, c) {
-            if (!isPlayerTurn || board[r][c] !== 0) return;
-
-            const flipped = getFlips(r, c, 1);
-            if (flipped.length === 0) return;
-
-            board[r][c] = 1;
-            flipped.forEach(([fr, fc]) => board[fr][fc] = 1);
-            drawBoard();
-
-            isPlayerTurn = false;
-            statusEl.innerText = "CPU is thinking...";
-
-            setTimeout(cpuTurn, 800);
+            if (turn !== 1 || board[r][c] !== 0) return;
+            if (flipDiscs(r, c, 1, true)) {
+                board[r][c] = 1;
+                updateBoardDOM();
+                turn = -1;
+                statusElement.textContent = "CPUが思考中...";
+                
+                if (isGameOver()) {
+                    endGame();
+                } else {
+                    setTimeout(cpuTurn, 800);
+                }
+            }
         }
 
-        // ★元々Node.js（サーバー側）にあったロジックをフロントエンドに移植しました
         function cpuTurn() {
-            const cpuMoves = getValidMoves(board, 2); // 2: White (CPU)
-            let chosenMove = null;
-
-            if (cpuMoves.length > 0) {
-                chosenMove = cpuMoves[Math.floor(Math.random() * cpuMoves.length)];
-            }
-
-            if (chosenMove) {
-                const { r, c } = chosenMove;
-                const flipped = getFlips(r, c, 2);
-                board[r][c] = 2;
-                flipped.forEach(([fr, fc]) => board[fr][fc] = 2);
-                drawBoard();
-                statusEl.innerText = "Your Turn (Black)";
-            } else {
-                statusEl.innerText = "CPU passed. Your Turn (Black)";
-            }
-            isPlayerTurn = true;
-        }
-
-        function getValidMoves(board, color) {
-            const moves = [];
-            const opponent = color === 1 ? 2 : 1;
-            const directions = [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]];
-
+            let moves = [];
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
-                    if (board[r][c] !== 0) continue;
-
-                    let canFlipTotal = false;
-                    for (let [dr, dc] of directions) {
-                        let nr = r + dr;
-                        let nc = c + dc;
-                        let hasOpponentBetween = false;
-
-                        while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === opponent) {
-                            nr += dr;
-                            nc += dc;
-                            hasOpponentBetween = true;
-                        }
-
-                        if (hasOpponentBetween && nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === color) {
-                            canFlipTotal = true;
-                            break;
-                        }
+                    if (board[r][c] === 0 && flipDiscs(r, c, -1, false)) {
+                        moves.push({r, c});
                     }
-                    if (canFlipTotal) moves.push({ r, c });
                 }
             }
-            return moves;
+            if (moves.length > 0) {
+                const move = moves[Math.floor(Math.random() * moves.length)];
+                flipDiscs(move.r, move.c, -1, true);
+                board[move.r][move.c] = -1;
+                updateBoardDOM();
+            }
+            turn = 1;
+            statusElement.textContent = "あなたの番です（黒）";
+            
+            if (isGameOver()) {
+                endGame();
+            }
         }
 
-        function getFlips(r, c, color) {
-            const opponent = color === 1 ? 2 : 1;
-            const directions = [[-1,-1], [-1,0], [-1,1], [0,-1], [0,1], [1,-1], [1,0], [1,1]];
-            let totalFlips = [];
-
-            for (let [dr, dc] of directions) {
-                let nr = r + dr;
-                let nc = c + dc;
-                let possibleFlips = [];
-
-                while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === opponent) {
-                    possibleFlips.push([nr, nc]);
-                    nr += dr;
-                    nc += dc;
+        function flipDiscs(row, col, color, doFlip) {
+            const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+            let flippedAny = false;
+            for (let [dr, dc] of dirs) {
+                let r = row + dr, c = col + dc;
+                let cellsToFlip = [];
+                while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === -color) {
+                    cellsToFlip.push({r, c});
+                    r += dr; c += dc;
                 }
-
-                if (possibleFlips.length > 0 && nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && board[nr][nc] === color) {
-                    totalFlips = totalFlips.concat(possibleFlips);
+                if (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === color && cellsToFlip.length > 0) {
+                    flippedAny = true;
+                    if (doFlip) {
+                        cellsToFlip.forEach(cell => board[cell.r][cell.c] = color);
+                    }
                 }
             }
-            return totalFlips;
+            return flippedAny;
         }
 
-        drawBoard();
+        function isGameOver() {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c] === 0 && (flipDiscs(r, c, 1, false) || flipDiscs(r, c, -1, false))) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function endGame() {
+            let black = 0, white = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c] === 1) black++;
+                    if (board[r][c] === -1) white++;
+                }
+            }
+            let resText = `ゲーム終了！ 黒:${black} 対 白:${white} で `;
+            if (black > white) resText += "あなたの勝ち！";
+            else if (white > black) resText += "CPUの勝ち！";
+            else resText += "引き分け！";
+            
+            statusElement.textContent = resText;
+            sendMatchComplete();
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
     </script>
 </body>
 </html>
