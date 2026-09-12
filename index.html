@@ -138,6 +138,7 @@
             document.getElementById('game-area').style.display = 'block';
             initGame();
         }
+
         // ランキングをRender経由でSupabaseから取得して表示
         async function fetchLeaderboard() {
             try {
@@ -170,7 +171,10 @@
         async function sendMatchComplete() {
             if (!currentUsername) return;
             try {
-                statusElement.textContent = "対戦結果を保存中...";
+                // 元の最終結果テキストを一時保存
+                const originalResultText = statusElement.textContent;
+                statusElement.textContent = originalResultText + "（対戦結果を保存中...）";
+                
                 const response = await fetch(`${RENDER_API_URL}/api/match-complete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -178,13 +182,22 @@
                 });
                 const result = await response.json();
                 console.log("保存結果:", result);
+                
+                // 【修正】保存が終わったら「保存完了！」を2秒表示したあと、元の結果に戻す
+                statusElement.textContent = originalResultText + "【保存完了！】";
+                setTimeout(() => {
+                    statusElement.textContent = originalResultText;
+                }, 2000);
+
                 // 保存が終わったらランキングを最新に更新
                 fetchLeaderboard();
             } catch (error) {
                 console.error("結果の送信失敗:", error);
+                statusElement.textContent = "結果の保存に失敗しました。";
             }
         }
-        // オセロの初期化（元のCPU対戦ロジックをシンプルに移植）
+
+        // オセロの初期化
         function initGame() {
             boardElement.innerHTML = "";
             board = Array(8).fill(null).map(() => Array(8).fill(0));
@@ -225,18 +238,43 @@
             }
         }
 
+        // 指定した色（1または-1）が盤面のどこかに置けるかチェックする関数
+        function canPlayerMove(color) {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c] === 0 && flipDiscs(r, c, color, false)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         function handleCellClick(r, c) {
             if (turn !== 1 || board[r][c] !== 0) return;
+            
+            // プレイヤー（黒）の着手
             if (flipDiscs(r, c, 1, true)) {
                 board[r][c] = 1;
                 updateBoardDOM();
-                turn = -1;
-                statusElement.textContent = "CPUが思考中...";
                 
                 if (isGameOver()) {
                     endGame();
-                } else {
+                    return;
+                }
+
+                // CPU（白）の番へ交代
+                turn = -1;
+                
+                // CPUが置けるかチェック
+                if (canPlayerMove(-1)) {
+                    statusElement.textContent = "CPUが思考中...";
                     setTimeout(cpuTurn, 800);
+                } else {
+                    // CPUが置けないならパスしてプレイヤーの番に戻す
+                    alert("CPUは置ける場所がないためパスします。");
+                    turn = 1;
+                    statusElement.textContent = "あなたの番です（黒）";
                 }
             }
         }
@@ -250,17 +288,31 @@
                     }
                 }
             }
+            
             if (moves.length > 0) {
                 const move = moves[Math.floor(Math.random() * moves.length)];
                 flipDiscs(move.r, move.c, -1, true);
                 board[move.r][move.c] = -1;
                 updateBoardDOM();
             }
-            turn = 1;
-            statusElement.textContent = "あなたの番です（黒）";
-            
+
             if (isGameOver()) {
                 endGame();
+                return;
+            }
+
+            // プレイヤー（黒）の番へ交代
+            turn = 1;
+
+            // プレイヤーが置けるかチェック
+            if (!canPlayerMove(1)) {
+                // 【ここがポイント】黒が置けない場合はパスして即座にCPUの番にする
+                alert("あなたは置ける場所がないためパスになります。");
+                turn = -1;
+                statusElement.textContent = "CPUが思考中...";
+                setTimeout(cpuTurn, 800);
+            } else {
+                statusElement.textContent = "あなたの番です（黒）";
             }
         }
 
@@ -285,14 +337,8 @@
         }
 
         function isGameOver() {
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (board[r][c] === 0 && (flipDiscs(r, c, 1, false) || flipDiscs(r, c, -1, false))) {
-                        return false;
-                    }
-                }
-            }
-            return true;
+            // 黒も白も両方置けない、または盤面に空きがない場合に終了
+            return !canPlayerMove(1) && !canPlayerMove(-1);
         }
 
         function endGame() {
@@ -320,5 +366,6 @@
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
     </script>
+
 </body>
 </html>
