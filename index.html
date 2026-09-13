@@ -74,7 +74,24 @@
         th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
         th { background-color: #f8f9fa; color: #555; }
     </style>
+    <script src="https://minepi.com"></script>
+
 </head>
+<!-- 1. Setup / Authentication Area -->
+<div id="setup-area" class="setup-container">
+    <h3>Sign In to Play</h3>
+    <!-- Manual Pi Authentication Button -->
+    <button onclick="handleManualSignIn()" style="background-color: #f1c40f; color: #2c3e50; font-weight: bold; margin-bottom: 20px; width: 80%;">
+        ⚡ Sign in with Pi Network
+    </button>
+    
+    <div style="margin: 15px 0; color: #7f8c8d; font-size: 14px;">- OR PLAY AS GUEST -</div>
+    
+    <input type="text" id="username-input" placeholder="Enter Guest Username" maxlength="15">
+    <br>
+    <button onclick="startGuestGame()">Play as Guest</button>
+</div>
+
 <body>
 
     <h1>オセロゲーム</h1>
@@ -112,259 +129,316 @@
     </div>
 
     <script>
-        // あなたのRenderサーバーのURL（最後にスラッシュは不要）
-        const RENDER_API_URL = "https://othero-server.onrender.com";
+// Part 1: Pi Network Authentication and Initial Setup
+const RENDER_API_URL = "https://onrender.com";
 
-        let currentUsername = "";
-        const boardElement = document.getElementById('board');
-        const statusElement = document.getElementById('status');
-        let board = [];
-        let turn = 1; // 1: 黒, -1: 白
+let currentUsername = "";
+let piAuthToken = "";
+const boardElement = document.getElementById('board');
+const statusElement = document.getElementById('status');
+let board = [];
+let turn = 1; // 1: Black (Player), -1: White (CPU)
 
-        // ページ読み込み時にランキングを取得
-        window.onload = function() {
-            fetchLeaderboard();
-        };
+// Automatically trigger Pi authentication when the app loads
+window.onload = async function() {
+    fetchLeaderboard();
+    await initPiAuthentication();
+};
 
-        // ユーザー名を入力してゲームを開始する
-        function startGame() {
-            const input = document.getElementById('username-input').value.trim();
-            if (!input) {
-                alert("名前を入力してください！");
-                return;
-            }
-            currentUsername = input;
-            document.getElementById('setup-area').style.display = 'none';
-            document.getElementById('game-area').style.display = 'block';
-            initGame();
-        }
+// Initialize Pi SDK as a Promise and Authenticate
+async function initPiAuthentication() {
+    if (typeof Pi !== 'undefined') {
+        try {
+            statusElement.textContent = "Initializing Pi Network SDK...";
+            // Treat Pi.init as a Promise
+            await new Promise((resolve) => {
+                Pi.init({ version: "2.0", sandbox: true });
+                resolve();
+            });
 
-        // ランキングをRender経由でSupabaseから取得して表示
-        async function fetchLeaderboard() {
-            try {
-                const response = await fetch(`${RENDER_API_URL}/api/leaderboard`);
-                const data = await response.json();
-                const tbody = document.getElementById('leaderboard-body');
-                tbody.innerHTML = "";
-
-                if (data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;">データがありません</td></tr>`;
-                    return;
-                }
-
-                data.forEach((row, index) => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${index + 1}位</td>
-                        <td>${escapeHtml(row.username)}</td>
-                        <td>${row.match_count}回</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            } catch (error) {
-                console.error("ランキングの取得失敗:", error);
-                document.getElementById('leaderboard-body').innerHTML = `<tr><td colspan="3" style="text-align:center; color:red;">取得に失敗しました</td></tr>`;
-            }
-        }
-
-        // ゲーム終了時にRenderへカウントを送信する関数
-        async function sendMatchComplete() {
-            if (!currentUsername) return;
-            try {
-                // 元の最終結果テキストを一時保存
-                const originalResultText = statusElement.textContent;
-                statusElement.textContent = originalResultText + "（対戦結果を保存中...）";
-                
-                const response = await fetch(`${RENDER_API_URL}/api/match-complete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: currentUsername })
-                });
-                const result = await response.json();
-                console.log("保存結果:", result);
-                
-                // 【修正】保存が終わったら「保存完了！」を2秒表示したあと、元の結果に戻す
-                statusElement.textContent = originalResultText + "【保存完了！】";
-                setTimeout(() => {
-                    statusElement.textContent = originalResultText;
-                }, 2000);
-
-                // 保存が終わったらランキングを最新に更新
-                fetchLeaderboard();
-            } catch (error) {
-                console.error("結果の送信失敗:", error);
-                statusElement.textContent = "結果の保存に失敗しました。";
-            }
-        }
-
-        // オセロの初期化
-        function initGame() {
-            boardElement.innerHTML = "";
-            board = Array(8).fill(null).map(() => Array(8).fill(0));
-            turn = 1;
-            statusElement.textContent = "あなたの番です（黒）";
-
-            // 初期配置
-            board[3][3] = -1; board[3][4] = 1;
-            board[4][3] = 1;  board[4][4] = -1;
-
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    cell.dataset.row = r;
-                    cell.dataset.col = c;
-                    
-                    const disc = document.createElement('div');
-                    disc.className = 'disc';
-                    cell.appendChild(disc);
-                    
-                    cell.addEventListener('click', () => handleCellClick(r, c));
-                    boardElement.appendChild(cell);
-                }
-            }
-            updateBoardDOM();
-        }
-
-        function updateBoardDOM() {
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const cell = boardElement.children[r * 8 + c];
-                    const disc = cell.firstChild;
-                    disc.className = 'disc';
-                    if (board[r][c] === 1) disc.classList.add('black');
-                    if (board[r][c] === -1) disc.classList.add('white');
-                }
-            }
-        }
-
-        // 指定した色（1または-1）が盤面のどこかに置けるかチェックする関数
-        function canPlayerMove(color) {
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (board[r][c] === 0 && flipDiscs(r, c, color, false)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        function handleCellClick(r, c) {
-            if (turn !== 1 || board[r][c] !== 0) return;
+            statusElement.textContent = "Authenticating with Pi Network...";
+            // Request username scope
+            const auth = await Pi.authenticate(["username"], onIncompletePaymentFound);
             
-            // プレイヤー（黒）の着手
-            if (flipDiscs(r, c, 1, true)) {
-                board[r][c] = 1;
-                updateBoardDOM();
-                
-                if (isGameOver()) {
-                    endGame();
-                    return;
-                }
-
-                // CPU（白）の番へ交代
-                turn = -1;
-                
-                // CPUが置けるかチェック
-                if (canPlayerMove(-1)) {
-                    statusElement.textContent = "CPUが思考中...";
-                    setTimeout(cpuTurn, 800);
-                } else {
-                    // CPUが置けないならパスしてプレイヤーの番に戻す
-                    alert("CPUは置ける場所がないためパスします。");
-                    turn = 1;
-                    statusElement.textContent = "あなたの番です（黒）";
-                }
-            }
-        }
-
-        function cpuTurn() {
-            let moves = [];
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (board[r][c] === 0 && flipDiscs(r, c, -1, false)) {
-                        moves.push({r, c});
-                    }
-                }
-            }
-            
-            if (moves.length > 0) {
-                const move = moves[Math.floor(Math.random() * moves.length)];
-                flipDiscs(move.r, move.c, -1, true);
-                board[move.r][move.c] = -1;
-                updateBoardDOM();
-            }
-
-            if (isGameOver()) {
-                endGame();
-                return;
-            }
-
-            // プレイヤー（黒）の番へ交代
-            turn = 1;
-
-            // プレイヤーが置けるかチェック
-            if (!canPlayerMove(1)) {
-                // 【ここがポイント】黒が置けない場合はパスして即座にCPUの番にする
-                alert("あなたは置ける場所がないためパスになります。");
-                turn = -1;
-                statusElement.textContent = "CPUが思考中...";
-                setTimeout(cpuTurn, 800);
+            // Send token to backend for validation
+            const isVerified = await verifyPiSessionOnBackend(auth.accessToken);
+            if (isVerified) {
+                currentUsername = auth.user.username;
+                piAuthToken = auth.accessToken;
+                document.getElementById('setup-area').style.display = 'none';
+                document.getElementById('game-area').style.display = 'block';
+                initGame();
             } else {
-                statusElement.textContent = "あなたの番です（黒）";
+                statusElement.textContent = "Pi Authentication failed on server.";
             }
+        } catch (error) {
+            console.error("Pi Network Auth Error:", error);
+            statusElement.textContent = "Pi Auth failed. Please sign in manually or use Guest mode.";
         }
+    } else {
+        statusElement.textContent = "Pi SDK not found. Running in Guest / Web mode.";
+    }
+}
 
-        function flipDiscs(row, col, color, doFlip) {
-            const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-            let flippedAny = false;
-            for (let [dr, dc] of dirs) {
-                let r = row + dr, c = col + dc;
-                let cellsToFlip = [];
-                while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === -color) {
-                    cellsToFlip.push({r, c});
-                    r += dr; c += dc;
-                }
-                if (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === color && cellsToFlip.length > 0) {
-                    flippedAny = true;
-                    if (doFlip) {
-                        cellsToFlip.forEach(cell => board[cell.r][cell.c] = color);
-                    }
-                }
-            }
-            return flippedAny;
-        }
+function onIncompletePaymentFound(payment) {
+    console.log("Incomplete payment found:", payment);
+}
 
-        function isGameOver() {
-            // 黒も白も両方置けない、または盤面に空きがない場合に終了
-            return !canPlayerMove(1) && !canPlayerMove(-1);
-        }
+// Manual sign-in trigger button function
+async function handleManualSignIn() {
+    await initPiAuthentication();
+}
 
-        function endGame() {
-            let black = 0, white = 0;
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    if (board[r][c] === 1) black++;
-                    if (board[r][c] === -1) white++;
-                }
-            }
-            let resText = `ゲーム終了！ 黒:${black} 対 白:${white} で `;
-            if (black > white) resText += "あなたの勝ち！";
-            else if (white > black) resText += "CPUの勝ち！";
-            else resText += "引き分け！";
+// Send access token to backend for verification
+async function verifyPiSessionOnBackend(accessToken) {
+    try {
+        const response = await fetch(`${RENDER_API_URL}/api/verify-session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken: accessToken })
+        });
+        const result = await response.json();
+        return result.success;
+    } catch (error) {
+        console.error("Session verification failed:", error);
+        return false;
+    }
+}
+
+// Guest Play Function
+function startGuestGame() {
+    const input = document.getElementById('username-input').value.trim();
+    if (!input) {
+        alert("Please enter a username!");
+        return;
+    }
+    currentUsername = input + " (Guest)";
+    document.getElementById('setup-area').style.display = 'none';
+    document.getElementById('game-area').style.display = 'block';
+    initGame();
+}
+// Part 2: Othello Game Core Logic and Pass Handling (English UI)
+function initGame() {
+    boardElement.innerHTML = "";
+    board = Array(8).fill(null).map(() => Array(8).fill(0));
+    turn = 1;
+    statusElement.textContent = "Your turn (Black)";
+
+    // Initial 4 discs layout
+    board[3][3] = -1; board[3][4] = 1;
+    board[4][3] = 1;  board[4][4] = -1;
+
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = r;
+            cell.dataset.col = c;
             
-            statusElement.textContent = resText;
-            sendMatchComplete();
+            const disc = document.createElement('div');
+            disc.className = 'disc';
+            cell.appendChild(disc);
+            
+            cell.addEventListener('click', () => handleCellClick(r, c));
+            boardElement.appendChild(cell);
+        }
+    }
+    updateBoardDOM();
+}
+
+function updateBoardDOM() {
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const cell = boardElement.children[r * 8 + c];
+            const disc = cell.firstChild;
+            disc.className = 'disc';
+            if (board[r][c] === 1) disc.classList.add('black');
+            if (board[r][c] === -1) disc.classList.add('white');
+        }
+    }
+}
+
+// Check if a specific player (1 or -1) has any valid moves left
+function canPlayerMove(color) {
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if (board[r][c] === 0 && flipDiscs(r, c, color, false)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function handleCellClick(r, c) {
+    if (turn !== 1 || board[r][c] !== 0) return;
+    
+    // Player's move (Black)
+    if (flipDiscs(r, c, 1, true)) {
+        board[r][c] = 1;
+        updateBoardDOM();
+        
+        if (isGameOver()) {
+            endGame();
+            return;
         }
 
-        function resetGame() {
-            initGame();
+        // Switch turn to CPU (White)
+        turn = -1;
+        
+        if (canPlayerMove(-1)) {
+            statusElement.textContent = "CPU is thinking...";
+            setTimeout(cpuTurn, 800);
+        } else {
+            // If CPU cannot move, CPU passes and turn returns to Player
+            alert("CPU has no valid moves and passes.");
+            turn = 1;
+            statusElement.textContent = "Your turn (Black)";
+        }
+    }
+}
+
+function cpuTurn() {
+    let moves = [];
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if (board[r][c] === 0 && flipDiscs(r, c, -1, false)) {
+                moves.push({r, c});
+            }
+        }
+    }
+    
+    if (moves.length > 0) {
+        const move = moves[Math.floor(Math.random() * moves.length)];
+        flipDiscs(move.r, move.c, -1, true);
+        board[move.r][move.c] = -1;
+        updateBoardDOM();
+    }
+
+    if (isGameOver()) {
+        endGame();
+        return;
+    }
+
+    // Switch turn back to Player (Black)
+    turn = 1;
+
+    // Check if Player can move, if not, Player passes back to CPU automatically
+    if (!canPlayerMove(1)) {
+        alert("You have no valid moves and must pass.");
+        turn = -1;
+        statusElement.textContent = "CPU is thinking...";
+        setTimeout(cpuTurn, 800);
+    } else {
+        statusElement.textContent = "Your turn (Black)";
+    }
+}
+// Part 3: Flip Logic, Server Communication and HTML Structure Integration
+
+function flipDiscs(row, col, color, doFlip) {
+    const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+    let flippedAny = false;
+    for (let [dr, dc] of dirs) {
+        let r = row + dr, c = col + dc;
+        let cellsToFlip = [];
+        while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === -color) {
+            cellsToFlip.push({r, c});
+            r += dr; c += dc;
+        }
+        if (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === color && cellsToFlip.length > 0) {
+            flippedAny = true;
+            if (doFlip) {
+                cellsToFlip.forEach(cell => board[cell.r][cell.c] = color);
+            }
+        }
+    }
+    return flippedAny;
+}
+
+function isGameOver() {
+    // Game over if neither player nor CPU can make a move
+    return !canPlayerMove(1) && !canPlayerMove(-1);
+}
+
+function endGame() {
+    let black = 0, white = 0;
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if (board[r][c] === 1) black++;
+            if (board[r][c] === -1) white++;
+        }
+    }
+    let resText = `Game Over! Black:${black} vs White:${white} - `;
+    if (black > white) resText += "You Win!";
+    else if (white > black) resText += "CPU Wins!";
+    else resText += "Draw!";
+    
+    statusElement.textContent = resText;
+    sendMatchComplete();
+}
+
+async function sendMatchComplete() {
+    if (!currentUsername) return;
+    try {
+        const originalResultText = statusElement.textContent;
+        statusElement.textContent = originalResultText + " (Saving match data...)";
+        
+        const response = await fetch(`${RENDER_API_URL}/api/match-complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: currentUsername })
+        });
+        const result = await response.json();
+        console.log("Save match result:", result);
+        
+        // Dynamic UI improvement: show confirmation and clean up after 2 seconds
+        statusElement.textContent = originalResultText + " 【Saved!】";
+        setTimeout(() => {
+            statusElement.textContent = originalResultText;
+        }, 2000);
+
+        fetchLeaderboard();
+    } catch (error) {
+        console.error("Failed to send match complete:", error);
+        statusElement.textContent = "Failed to save match data.";
+    }
+}
+
+async function fetchLeaderboard() {
+    try {
+        const response = await fetch(`${RENDER_API_URL}/api/leaderboard`);
+        const data = await response.json();
+        const tbody = document.getElementById('leaderboard-body');
+        tbody.innerHTML = "";
+
+        if (data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;">No data available</td></tr>`;
+            return;
         }
 
-        function escapeHtml(str) {
-            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
+        data.forEach((row, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${escapeHtml(row.username)}</td>
+                <td>${row.match_count}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error("Leaderboard fetch error:", error);
+        document.getElementById('leaderboard-body').innerHTML = `<tr><td colspan="3" style="text-align:center; color:red;">Failed to load leaderboard</td></tr>`;
+    }
+}
+
+function resetGame() {
+    initGame();
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
     </script>
 
 </body>
