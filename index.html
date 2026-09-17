@@ -387,7 +387,8 @@ async function sendMatchComplete() {
         statusElement.textContent = originalResultText + " (Saving match data...)";
         
         //const response = await fetch(`${RENDER_API_URL}/api/match-complete`, {
-        const response = await fetch(`https://onrender.com`, {
+        //const response = await fetch(`https://onrender.com`, {
+        const response = await fetch(`https://othero-server.onrender.com/api/leaderboard`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: currentUsername })
@@ -411,7 +412,8 @@ async function sendMatchComplete() {
 async function fetchLeaderboard() {
     try {
         //const response = await fetch(`${RENDER_API_URL}/api/leaderboard`);
-        const response = await fetch(`https://onrender.com`);
+        //const response = await fetch(`https://onrender.com`);
+        const response = await fetch(`https://othero-server.onrender.com/api/leaderboard`);
         
         const data = await response.json();
         const tbody = document.getElementById('leaderboard-body');
