@@ -338,6 +338,7 @@ function cpuTurn() {
 // Part 3: Flip Logic, Server Communication and HTML Structure Integration
 
 function flipDiscs(row, col, color, doFlip) {
+
     const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
     let flippedAny = false;
     for (let [dr, dc] of dirs) {
@@ -385,7 +386,8 @@ async function sendMatchComplete() {
         const originalResultText = statusElement.textContent;
         statusElement.textContent = originalResultText + " (Saving match data...)";
         
-        const response = await fetch(`${RENDER_API_URL}/api/match-complete`, {
+        //const response = await fetch(`${RENDER_API_URL}/api/match-complete`, {
+        const response = await fetch(`https://onrender.com`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: currentUsername })
@@ -408,7 +410,9 @@ async function sendMatchComplete() {
 
 async function fetchLeaderboard() {
     try {
-        const response = await fetch(`${RENDER_API_URL}/api/leaderboard`);
+        //const response = await fetch(`${RENDER_API_URL}/api/leaderboard`);
+        const response = await fetch(`https://onrender.com`);
+        
         const data = await response.json();
         const tbody = document.getElementById('leaderboard-body');
         tbody.innerHTML = "";
