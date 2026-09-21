@@ -33,9 +33,14 @@ const leaderboardBody = document.getElementById("leaderboard-body");
 
 // アプリ起動時の自動認証
 window.onload = function () {
-    if (typeof Pi !== 'undefined') {
-        authStatus.innerText = "Authenticating with Pi Network...";
-        try {
+    // 起動時にまずランキングだけは安全に読み込む
+    fetchLeaderboard();
+
+    // 通常ブラウザでのSDKエラーによる強制終了（フリーズ）を防ぐための厳重なチェック
+    try {
+        if (typeof Pi !== 'undefined' && Pi.init) {
+            authStatus.innerText = "Authenticating with Pi Network...";
+            
             Pi.init({ version: "2.0", sandbox: false });
             
             // ログイン（認証）処理の開始
@@ -47,7 +52,7 @@ window.onload = function () {
 
                     authStatus.innerText = `Welcome, ${piUsername}! Loading game...`;
                     
-                    // 2. 役割「前者」：ユーザー名を自動セットしてログインを完了
+                    // ユーザー名を自動セットしてログインを完了
                     setTimeout(() => {
                         completeLogin(piUsername);
                     }, 1000);
@@ -56,41 +61,49 @@ window.onload = function () {
                     console.error("Pi Authentication failed:", error);
                     authStatus.innerText = "Pi Authentication failed. Please use Guest mode or retry in Pi Browser.";
                 });
-        } catch (err) {
-            console.error("Pi init error:", err);
-            authStatus.innerText = "Failed to initialize Pi SDK.";
+        } else {
+            // 通常ブラウザ（Pi環境がない場合）は安全に待機状態にする
+            authStatus.innerText = "Standard browser detected. Sign in with Pi or Play as Guest.";
         }
-    } else {
-        // 通常ブラウザ（Pi SDKが読み込めない環境）の場合
-        authStatus.innerText = "Standard browser detected. Sign in with Pi or Play as Guest.";
+    } catch (err) {
+        console.error("Pi SDK bypass handling:", err);
+        authStatus.innerText = "Standard browser mode. Sign in with Pi or Play as Guest.";
     }
-    
-    // サーバーが起きているかどうかにかかわらずランキングの初期取得を試みる
-    fetchLeaderboard();
 };
 
-// 役割「後者」：通常ブラウザからPi Browserへジャンプさせる関数
+
+
+
+
+
+
+
+// 通常ブラウザからPi Browserへジャンプさせる関数
 function redirectToPiBrowser() {
     const appUrl = "tysseo7.github.io/othello-app/";
     const piProtocolUrl = "pinetwork://" + appUrl;
 
-    // Pi Browser環境（Pi SDKが存在する）であれば、通常のログイン処理として動かす
-    if (typeof Pi !== 'undefined' && isPiUser) {
+    // もしすでにPi Browser環境内で認証が成功しているなら、そのままゲーム開始
+    if (isPiUser && piUsername) {
         completeLogin(piUsername);
         return;
     }
 
-    // 通常ブラウザの場合はディープリンクを使ってPi Browserを起動させる
+    // 通常ブラウザの場合はディープリンクを使ってPi Browserを強制起動
     authStatus.innerText = "Opening Pi Browser...";
     window.location.href = piProtocolUrl;
 
-    // もしスマホにPi Browserが入っていない場合のフォールバック（ストアへ誘導など）
+    // スマホにPi Browserが入っていない場合や反応がない場合の救済措置
     setTimeout(() => {
-        if (confirm("Pi Browserを開けませんでした。アプリがインストールされていない場合は、Pi Networkアプリをダウンロードしてください。公式サイトへ移動しますか？")) {
-            window.location.href = "https://minepi.com";
+        if (authStatus.innerText === "Opening Pi Browser...") {
+            authStatus.innerText = "Standard browser detected. Sign in with Pi or Play as Guest.";
+            if (confirm("Pi Browserアプリを起動できませんでした。アプリがインストールされていない場合は、Pi Network公式サイトからダウンロードしてください。移動しますか？")) {
+                window.location.href = "https://minepi.com";
+            }
         }
-    }, 2500);
+    }, 3000);
 }
+
 
 // ゲストとしてログイン
 function loginAsGuest() {
