@@ -1,136 +1,73 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>オセロゲーム & ランキング</title>
-    <style>
-        body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-            margin: 0;
-        }
-        h1 { color: #333; margin-bottom: 10px; }
-        .setup-container, .game-container, .ranking-container {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            width: 100%;
-            max-width: 400px;
-            box-sizing: border-box;
-            text-align: center;
-        }
-        input[type="text"] {
-            width: 80%;
-            padding: 10px;
-            font-size: 16px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        button:hover { background-color: #0056b3; }
-        #board {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 2px;
-            background-color: #333;
-            padding: 2px;
-            width: 320px;
-            height: 320px;
-            margin: 0 auto 15px;
-        }
-        .cell {
-            background-color: #006633;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-        }
-        .disc {
-            width: 80%;
-            height: 80%;
-            border-radius: 50%;
-            display: none;
-        }
-        .black { background-color: black; display: block; }
-        .white { background-color: white; display: block; }
-        #status { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #555; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
-        th { background-color: #f8f9fa; color: #555; }
-    </style>
+    <title>Online Othello</title>
+    <link rel="stylesheet" href="index.css">
+    <!-- Pi Network SDK -->
     <script src="https://minepi.com"></script>
-
 </head>
-<!-- 1. Setup / Authentication Area -->
-<div id="setup-area" class="setup-container">
-    <h3>Sign In to Play</h3>
-    <!-- Manual Pi Authentication Button -->
-    <button onclick="handleManualSignIn()" style="background-color: #f1c40f; color: #2c3e50; font-weight: bold; margin-bottom: 20px; width: 80%;">
-        ⚡ Sign in with Pi Network
-    </button>
-    
-    <div style="margin: 15px 0; color: #7f8c8d; font-size: 14px;">- OR PLAY AS GUEST -</div>
-    
-    <input type="text" id="username-input" placeholder="Enter Guest Username" maxlength="15">
-    <br>
-    <button onclick="startGuestGame()">Play as Guest</button>
-</div>
-
 <body>
-
-    <h1>オセロゲーム</h1>
-
-    <!-- 1. ユーザー名入力エリア -->
-    <!--
-    <div id="setup-area" class="setup-container">
-        <h3>ユーザー名を入力してください</h3>
-        <input type="text" id="username-input" placeholder="例: プレイヤー1" maxlength="15">
-        <br>
-        <button onclick="startGame()">ゲーム開始</button>
-    </div>
-    -->
-
-    <!-- 2. オセロゲーム本体エリア（最初は非表示） -->
-    <div id="game-area" class="game-container" style="display: none;">
-        <div id="status">黒の番です</div>
-        <div id="board"></div>
-        <button onclick="resetGame()">最初からやり直す</button>
+    <div id="auth-container">
+        <h2>Othello Online - Authentication</h2>
+        <p id="auth-status">Checking Pi Network authentication...</p>
+        
+        <!-- 通常ブラウザのときはPi Browserへジャンプ、Pi Browser内なら通常の手動認証として動かします -->
+        <button id="btn-pi-login" onclick="redirectToPiBrowser()">Sign in with Pi Network</button>
+        <button id="btn-guest-login" onclick="loginAsGuest()">Play as Guest</button>
     </div>
 
-    <!-- 3. ランキング表示エリア -->
-    <div class="ranking-container">
-        <h3>🔥 世界対戦回数ランキング (Top 10)</h3>
-        <table id="leaderboard-table">
-            <thead>
-                <tr>
-                    <th>順位</th>
-                    <th>ユーザー名</th>
-                    <th>対戦回数</th>
-                </tr>
-            </thead>
-            <tbody id="leaderboard-body">
-                <tr><td colspan="3" style="text-align:center;">読み込み中...</td></tr>
-            </tbody>
-        </table>
+    <div id="game-container" style="display: none;">
+        <header>
+            <h1>Othello</h1>
+            <div id="user-info">
+                Playing as: <span id="display-username">Guest</span>
+            </div>
+        </header>
+
+        <main>
+            <div id="scoreboard">
+                <div class="score-box black">
+                    <span class="player-name">Player (Black)</span>
+                    <span id="score-black" class="score-val">2</span>
+                </div>
+                <div class="score-box white">
+                    <span class="player-name">CPU (White)</span>
+                    <span id="score-white" class="score-val">2</span>
+                </div>
+            </div>
+
+            <div id="message-panel">
+                <p id="game-message">Your turn (Black)</p>
+            </div>
+
+            <div id="board"></div>
+
+            <div id="controls">
+                <button id="btn-restart">Restart Game</button>
+            </div>
+
+            <!-- ランキングセクション -->
+            <section id="leaderboard-section">
+                <h3>🔥 世界対戦回数ランキング (Top 10)</h3>
+                <table id="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>順位</th>
+                            <th>ユーザー名</th>
+                            <th>対戦回数</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body">
+                        <!-- データがここに動的に挿入されます -->
+                    </tbody>
+                </table>
+            </section>
+        </main>
     </div>
 
+    <!-- ゲームロジックを読み込み -->
     <script src="app.js"></script>
-
 </body>
 </html>
