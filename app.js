@@ -31,72 +31,55 @@ const leaderboardBody = document.getElementById("leaderboard-body");
 // 2. Pi Network 認証・ジャンプ機能（今回の主要アップデート）
 // ==========================================
 
-// アプリ起動時の自動認証
-window.onload = function () {
-  fetchLeaderboard();
-  if (typeof Pi !== 'undefined' && Pi.init) {
-    authStatus.innerText = "Pi Network環境を検出しました。認証中...";
-    Pi.init({ version: "2.0" });
-  triggerPiAuth();
-  } else {
-    authStatus.innerText = "通常ブラウザです。Piブラウザで開くかゲストでプレイしてください。";
-  }
-};
 
-function triggerPiAuth() {
-  const scopes = ["username"];
+// ボタンの要素を取得
+const piLoginBtn = document.getElementById("piLoginBtn");
 
-  Pi.authenticate(scopes, onIncompletePaymentFound)
-    .then(function(auth) {
-      completeLogin(auth.user.username);
-    })
-    .catch(function(error) {
-      console.error(error);
-      authStatus.innerText = "認証エラーが発生しました。再試行してください。";
-    });
-}
-
-function onIncompletePaymentFound(payment) {
-  console.log("未完了の決済が見つかりました:", payment);
-}
-
-
-
-
-
-function redirectToPiBrowser() {
-  if (typeof Pi !== 'undefined' && Pi.init) {
-    // Piブラウザ環境であれば認証をスタート
-    triggerPiAuth();
-  } else {
-    // Chromeなど一般ブラウザの場合：フリーズやエラーを防ぐため案内文に切り替えるだけにする
-    authStatus.innerHTML = "<div style='color:#e74c3c; font-weight:bold; margin-top:10px;'>【重要】このボタンはPiブラウザ専用です。<br>スマートフォンで『Pi Browser』アプリを起動し、App Studio（Use External AI）からこのアプリを開いてください。</div>";
-  }
-}
-
-
-
-
-  
-
-// ゲストとしてログイン
-function loginAsGuest() {
-    let guestName = prompt("Enter your Guest Name:", "Player");
-    if (!guestName || guestName.trim() === "") {
-        guestName = "GuestPlayer";
+// ボタンがクリックされた時の処理
+if (piLoginBtn) {
+  piLoginBtn.addEventListener("click", async () => {
+    // 1. Piブラウザ環境（Piオブジェクトが存在するか）をチェック
+    if (typeof Pi !== 'undefined') {
+      authStatus.innerText = "Pi Network環境を検出しました。認証中...";
+      try {
+        // クリックされてから初期化を実行する
+        await Pi.init({ version: "2.0" });
+        
+        // 認証に必要なスコープ
+        const scopes = ["username"];
+        
+        // 認証を実行
+        const auth = await Pi.authenticate(scopes, onIncompletePaymentFound);
+        
+        // 認証成功：取得したユーザー名をオセロのログイン処理に渡す
+        if (auth && auth.user && auth.user.username) {
+          completeLogin(auth.user.username);
+        } else {
+          authStatus.innerText = "ユーザー名の取得に失敗しました。";
+        }
+      } catch (e) {
+        console.error("認証中にエラーが発生しました:", e);
+        authStatus.innerText = "認証エラーが発生しました。再試行してください。";
+      }
+    } else {
+      // 2. Chromeなどの一般ブラウザの場合：エラーを起こすpi://は使わず、案内文を出す
+      authStatus.innerHTML = "<div style='color:#e74c3c; font-weight:bold; margin-top:10px;'>【重要】このボタンはPiブラウザ専用です。<br>『Pi Browser』アプリ内のApp Studio（Use External AI）からこのアプリを開いてください。</div>";
     }
-    isPiUser = false;
-    // ゲストプレイの場合は名前の後ろに (Guest) を自動付与
-    completeLogin(guestName.trim() + " (Guest)");
+  });
 }
 
-// ログイン完了後の画面切り替え
-function completeLogin(username) {
-    displayUsername.innerText = username;
-    authContainer.style.display = "none";
-    gameContainer.style.display = "block";
-    initGame();
+// 決済用のダミー関数（Piの仕様上必須）
+function onIncompletePaymentFound(payment) {
+  console.log("未完了の決済:", payment);
 }
+
+
+
+
+
+
+
+                  
 
 // ダミー関数（支払い登録の要件を満たすために必須）
 function onIncompletePaymentFound(payment) {
