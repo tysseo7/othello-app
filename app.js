@@ -43,7 +43,15 @@ window.onload = function () {
   }
 };
 
-
+function triggerPiAuth() {
+  Pi.authenticate(["username"], auth, error);
+}
+function auth(result) {
+  completeLogin(result.user.username);
+}
+function error(err) {
+  authStatus.innerText = "認証エラーが発生しました";
+}
 
 
 
