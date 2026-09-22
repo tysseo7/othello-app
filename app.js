@@ -36,7 +36,7 @@ window.onload = function () {
   fetchLeaderboard();
   if (typeof Pi !== 'undefined' && Pi.init) {
     authStatus.innerText = "Pi Network環境を検出しました。認証中...";
-    Pi.init({ version: "2.0", sandbox: true });
+    Pi.init({ version: "2.0" });
   triggerPiAuth();
   } else {
     authStatus.innerText = "通常ブラウザです。Piブラウザで開くかゲストでプレイしてください。";
