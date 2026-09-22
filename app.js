@@ -41,7 +41,8 @@ window.onload = function () {
         if (typeof Pi !== 'undefined' && Pi.init) {
             authStatus.innerText = "Authenticating with Pi Network...";
             
-            Pi.init({ version: "2.0", sandbox: false });
+            //Pi.init({ version: "2.0", sandbox: false });
+            Pi.init({ version: "2.0", sandbox: true });
             
             // ログイン（認証）処理の開始
             Pi.authenticate(["username", "payments"], onIncompletePaymentFound)
