@@ -44,14 +44,22 @@ window.onload = function () {
 };
 
 function triggerPiAuth() {
-  Pi.authenticate(["username"], auth, error);
+  const scopes = ["username"];
+
+  Pi.authenticate(scopes, onIncompletePaymentFound)
+    .then(function(auth) {
+      completeLogin(auth.user.username);
+    })
+    .catch(function(error) {
+      console.error(error);
+      authStatus.innerText = "認証エラーが発生しました。再試行してください。";
+    });
 }
-function auth(result) {
-  completeLogin(result.user.username);
+
+function onIncompletePaymentFound(payment) {
+  console.log("未完了の決済が見つかりました:", payment);
 }
-function error(err) {
-  authStatus.innerText = "認証エラーが発生しました";
-}
+
 
 
 
