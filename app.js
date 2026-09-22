@@ -33,43 +33,14 @@ const leaderboardBody = document.getElementById("leaderboard-body");
 
 // アプリ起動時の自動認証
 window.onload = function () {
-    // 起動時にまずランキングだけは安全に読み込む
-    fetchLeaderboard();
-
-    // 通常ブラウザでのSDKエラーによる強制終了（フリーズ）を防ぐための厳重なチェック
-    try {
-        if (typeof Pi !== 'undefined' && Pi.init) {
-            authStatus.innerText = "Authenticating with Pi Network...";
-            
-            //Pi.init({ version: "2.0", sandbox: false });
-            Pi.init({ version: "2.0", sandbox: true });
-            
-            // ログイン（認証）処理の開始
-            Pi.authenticate(["username", "payments"], onIncompletePaymentFound)
-                .then(function (auth) {
-                    isPiUser = true;
-                    piUsername = auth.user.username;
-                    accessToken = auth.accessToken;
-
-                    authStatus.innerText = `Welcome, ${piUsername}! Loading game...`;
-                    
-                    // ユーザー名を自動セットしてログインを完了
-                    setTimeout(() => {
-                        completeLogin(piUsername);
-                    }, 1000);
-                })
-                .catch(function (error) {
-                    console.error("Pi Authentication failed:", error);
-                    authStatus.innerText = "Pi Authentication failed. Please use Guest mode or retry in Pi Browser.";
-                });
-        } else {
-            // 通常ブラウザ（Pi環境がない場合）は安全に待機状態にする
-            authStatus.innerText = "Standard browser detected. Sign in with Pi or Play as Guest.";
-        }
-    } catch (err) {
-        console.error("Pi SDK bypass handling:", err);
-        authStatus.innerText = "Standard browser mode. Sign in with Pi or Play as Guest.";
-    }
+  fetchLeaderboard();
+  if (typeof Pi !== 'undefined' && Pi.init) {
+    authStatus.innerText = "Pi Network環境を検出しました。認証中...";
+    Pi.init({ version: "2.0", sandbox: true });
+  triggerPiAuth();
+  } else {
+    authStatus.innerText = "通常ブラウザです。Piブラウザで開くかゲストでプレイしてください。";
+  }
 };
 
 
