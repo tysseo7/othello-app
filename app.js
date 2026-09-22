@@ -66,33 +66,28 @@ function onIncompletePaymentFound(payment) {
 
 
 
-// 通常ブラウザからPi Browserへジャンプさせる関数
 function redirectToPiBrowser() {
-    const appUrl = "tysseo7.github.io/othello-app/";
-    //const piProtocolUrl = "pinetwork://" + appUrl;
-    const piProtocolUrl = "https://" + appUrl;
-
-    // もしすでにPi Browser環境内で認証が成功しているなら、そのままゲーム開始
-    if (isPiUser && piUsername) {
-        completeLogin(piUsername);
-        return;
-    }
-
-    // 通常ブラウザの場合はディープリンクを使ってPi Browserを強制起動
-    authStatus.innerText = "Opening Pi Browser...";
-    window.location.href = piProtocolUrl;
-
-    // スマホにPi Browserが入っていない場合や反応がない場合の救済措置
-    setTimeout(() => {
-        if (authStatus.innerText === "Opening Pi Browser...") {
-            authStatus.innerText = "Standard browser detected. Sign in with Pi or Play as Guest.";
-            if (confirm("Pi Browserアプリを起動できませんでした。アプリがインストールされていない場合は、Pi Network公式サイトからダウンロードしてください。移動しますか？")) {
-                window.location.href = "https://minepi.com";
-            }
-        }
-    }, 3000);
+  // Piブラウザを検出した場合、またはURLや環境からPiブラウザ内と判断できる場合は即座に認証へ
+  if (typeof Pi !== 'undefined' && Pi.init) {
+    triggerPiAuth();
+  } else {
+    // 完全に外部のChromeなどの場合：無理にpi://で飛ばさず、案内メッセージに切り替える
+    authStatus.innerText = "このアプリはPiブラウザ専用です。URLをコピーしてPiブラウザのアドレスバーに貼り付けるか、App Studioから開いてください。";
+    
+    // オプション：ユーザーがURLをコピーしやすいようにクリップボードにコピーする処理
+    navigator.clipboard.writeText(window.location.href)
+      .then(() => {
+        alert("アプリのURLをクリップボードにコピーしました！Piブラウザを開いてアドレスバーに貼り付けてください。");
+      })
+      .catch(err => {
+        console.log("コピー失敗:", err);
+      });
+  }
 }
 
+
+
+  
 
 // ゲストとしてログイン
 function loginAsGuest() {
