@@ -82,7 +82,8 @@ window.onload = function () {
 // 通常ブラウザからPi Browserへジャンプさせる関数
 function redirectToPiBrowser() {
     const appUrl = "tysseo7.github.io/othello-app/";
-    const piProtocolUrl = "pinetwork://" + appUrl;
+    //const piProtocolUrl = "pinetwork://" + appUrl;
+    const piProtocolUrl = "https://" + appUrl;
 
     // もしすでにPi Browser環境内で認証が成功しているなら、そのままゲーム開始
     if (isPiUser && piUsername) {
