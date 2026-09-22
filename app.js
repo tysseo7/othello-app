@@ -64,26 +64,16 @@ function onIncompletePaymentFound(payment) {
 
 
 
-
-
 function redirectToPiBrowser() {
-  // Piブラウザを検出した場合、またはURLや環境からPiブラウザ内と判断できる場合は即座に認証へ
   if (typeof Pi !== 'undefined' && Pi.init) {
+    // Piブラウザ環境であれば認証をスタート
     triggerPiAuth();
   } else {
-    // 完全に外部のChromeなどの場合：無理にpi://で飛ばさず、案内メッセージに切り替える
-    authStatus.innerText = "このアプリはPiブラウザ専用です。URLをコピーしてPiブラウザのアドレスバーに貼り付けるか、App Studioから開いてください。";
-    
-    // オプション：ユーザーがURLをコピーしやすいようにクリップボードにコピーする処理
-    navigator.clipboard.writeText(window.location.href)
-      .then(() => {
-        alert("アプリのURLをクリップボードにコピーしました！Piブラウザを開いてアドレスバーに貼り付けてください。");
-      })
-      .catch(err => {
-        console.log("コピー失敗:", err);
-      });
+    // Chromeなど一般ブラウザの場合：フリーズやエラーを防ぐため案内文に切り替えるだけにする
+    authStatus.innerHTML = "<div style='color:#e74c3c; font-weight:bold; margin-top:10px;'>【重要】このボタンはPiブラウザ専用です。<br>スマートフォンで『Pi Browser』アプリを起動し、App Studio（Use External AI）からこのアプリを開いてください。</div>";
   }
 }
+
 
 
 
