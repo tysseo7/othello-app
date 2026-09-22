@@ -334,7 +334,7 @@ function checkGameStatus(blackCount, whiteCount) {
     const blackCanMove = canPlayerMove(BLACK);
     const whiteCanMove = canPlayerMove(WHITE);
     if (! blackCanMove && ! whiteCanMove) {// 両者打てなくなったらゲーム終了
-        let msg = `Game Over! Black: ${blackCount}, White: ${whiteCount}.`;
+        let msg = "Game Over! Black: ${blackCount}, White: ${whiteCount}.";
     //if (!blackCanMove && !whiteCanMove) {// 両者打てなくなったらゲーム終了
         //let msg = Game Over! Black: ${blackCount}, White: ${whiteCount}. ;
         if (blackCount > whiteCount) {
